@@ -16,6 +16,17 @@ class SmsReceiver : BroadcastReceiver() {
     }
 
     override fun onReceive(context: Context?, intent: Intent?) {
+        if (intent?.action == "android.provider.Telephony.SMS_RECEIVED") {
+            handleSmsReceived(context, intent)
+        } else if (intent?.action == ConnectivityManager.CONNECTIVITY_ACTION) {
+            Log.d("Debug","Message to be sent")
+            if (isInternetAvailable(context)) {
+                sendPendingMessages(context)
+            }
+        }
+    }
+
+    private fun handleSmsReceived(context: Context?, intent: Intent?) {
         val bundle = intent?.extras
         val messages: Array<SmsMessage?>
         var str = ""
@@ -47,6 +58,24 @@ class SmsReceiver : BroadcastReceiver() {
         context?.let {
             val dbHelper = DatabaseHelper(it)
             dbHelper.addMessage(subject, body)
+        }
+    }
+
+    private fun sendPendingMessages(context: Context?) {
+        context?.let {
+            val dbHelper = DatabaseHelper(it)
+            val cursor = dbHelper.getAllMessages()
+
+            if (cursor.moveToFirst()) {
+                do {
+                    val id = cursor.getInt(cursor.getColumnIndexOrThrow("_id"))
+                    val subject = cursor.getString(cursor.getColumnIndexOrThrow("subject"))
+                    val body = cursor.getString(cursor.getColumnIndexOrThrow("body"))
+                    EmailUtils.sendEmail(it, subject, body)
+                    dbHelper.deleteMessage(id)
+                } while (cursor.moveToNext())
+            }
+            cursor.close()
         }
     }
 
